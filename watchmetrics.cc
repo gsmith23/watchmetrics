@@ -26,17 +26,6 @@ using namespace std;
 // Globals
    
 //----------
-// Objects
-
-// for use with wmStyle.C
-TStyle * wmStyle = GetwmStyle();
-gROOT->SetStyle("wmStyle");
-gROOT->ForceStyle();
-
-TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
-TH1I    * h1[nFiles];  
-
-//----------
 // Variables
 static const int nFiles = 3;
 string parent_path = "/Users/gsmith23/software/modern/pull94/watchmakers/";
@@ -49,11 +38,22 @@ int CIDs[nFiles] = {1,3,5};
 Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
 
 //----------
+// Objects
+
+// for use with wmStyle.C
+TStyle * wmStyle = GetwmStyle();
+
+TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
+TH1I    * h1[nFiles];  
+
+
+//----------
 // Functions
 string GetFileName(int genPID, int fileID);
 string GetFilePath(int genPID, int fileID);
 void   Draw_Multi_TH(string metric = "nhit");
 void   SetIDs(int particleID, int cocktailID);
+void   SetGraphics(bool logY);
 
 //-------------------
 
@@ -64,10 +64,20 @@ void   watchmetrics(string metric1 = "nhit",
 		    int    cocktailID = 1){
   
   SetIDs(particleID,cocktailID);
-  c1->SetLogy(logY);
+
+  SetGraphics(logY);
   
   Draw_Multi_TH(metric1);
   
+}
+
+void   SetGraphics(bool logY){
+
+  c1->SetLogy(logY);
+
+  gROOT->SetStyle("wmStyle");
+  gROOT->ForceStyle();
+
 }
 
 void SetIDs(int particleID, int cocktailID){
