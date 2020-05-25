@@ -18,6 +18,7 @@ using namespace std;
 
 #include <TRandom.h>
 
+// https://github.com/Watchman-PMT/Wavedump_Wrapper/blob/master/Common_Tools/wmStyle.C
 #include "wmStyle.C"
 
 //------------------
@@ -87,7 +88,8 @@ void Draw_Multi_TH(string metric){
     string file_name = GetFileName(PIDs[iFile],CIDs[iFile]);
         
     TFile *f;
-    
+	  
+    // comment out if not using wmStyle.C
     TStyle * wmStyle = GetwmStyle();
     gROOT->SetStyle("wmStyle");
     gROOT->ForceStyle();
