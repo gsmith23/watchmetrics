@@ -1,7 +1,7 @@
 watchmetrics
 
 gary.smith@ed.ac.uk
-15 05 2020
+25 05 2020
 
 A program for comparing watchman fill cocktails
 using performance mertics.
@@ -12,16 +12,7 @@ Firstly you have to have output files from
 rat stored in a watchmakers folder naming 
 convention - see GetFilePath() 
 
-Then, after changing the file paths 
-as necessary, do
-
 $ root
 root [0] .L watchmetrics.cc+
-// compare cocktails for IBD positrons
-root [1] Draw_Multi_hNhits(11)
-// ................. for IBD neutrons
-root [2] Draw_Multi_hNhits(2112)
-// ................. for 208Tl PMT glass
-root [3] Draw_Multi_hNhits(208)
-// compare particles for 3 pct WbLS
-root [4] Draw_Multi_hNhits(0,3)
+root [1] watchmetrics()
+or see the options in watchmetrics.cc
