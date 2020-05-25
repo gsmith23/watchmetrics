@@ -12,6 +12,10 @@ Firstly you have to have output files from
 rat stored in a watchmakers folder naming 
 convention - see GetFilePath() 
 
+Note that gStyle is set using 
+https://github.com/Watchman-PMT/Wavedump_Wrapper/blob/master/Common_Tools/wmStyle.C
+by default so you will need this file or to comment out the lines where it is used.
+
 $ root
 root [0] .L watchmetrics.cc+
 root [1] watchmetrics()
