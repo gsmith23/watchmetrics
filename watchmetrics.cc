@@ -20,6 +20,156 @@ using namespace std;
 
 #include "wmStyle.C"
 
+//------------------
+// Globals
+
+//----------
+// Functions
+string GetFileName(int genPID, int fileID);
+string GetFilePath(int genPID, int fileID);
+void   Draw_Multi_TH(string metric = "nhit");
+void   SetIDs(int particleID, int cocktailID);
+
+//----------
+// Variables
+static const int nFiles = 3;
+string parent_path = "/Users/gsmith23/software/modern/pull94/watchmakers/";
+
+// particle ID (dev with e+, n ,208Tl)
+int PIDs[nFiles] = {11,2112,208}; 
+// cocktail ID (dev with percentate WbLS)
+int CIDs[nFiles] = {1,3,5}; 
+
+Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
+
+//----------
+// Objects
+TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
+TH1I    * h1[nFiles];  
+
+//-------------------
+
+void   watchmetrics(string metric1 = "nhit",
+		    bool   logY = false, 
+		    int    particleID = 11, 
+		    string metric2 = "",
+		    int    cocktailID = 1){
+  
+  SetIDs(particleID,cocktailID);
+  c1->SetLogy(logY);
+  
+  Draw_Multi_TH(metric1);
+  
+}
+
+void SetIDs(int particleID, int cocktailID){
+  
+  for( int i = 0 ; i < nFiles ; i++){
+    if  (particleID != 0) // compare cocktail
+      PIDs[i] = particleID;
+    else                 // compare particle
+      CIDs[i] = cocktailID;
+  }
+}
+
+void Draw_Multi_TH(string metric){
+  
+
+  TLatex * latex = new TLatex();
+  string text = "test";
+  latex->SetNDC();
+  latex->SetTextSize(0.03);
+  
+  string option = "";
+  for (int iFile = 0 ; iFile < nFiles ; iFile++ ){
+    
+    string file_path = GetFilePath(PIDs[iFile],CIDs[iFile]);
+    string file_name = GetFileName(PIDs[iFile],CIDs[iFile]);
+        
+    TFile *f;
+    
+    TStyle * wmStyle = GetwmStyle();
+    gROOT->SetStyle("wmStyle");
+    gROOT->ForceStyle();
+    
+    string title = ";";
+    title += metric;
+    title += ";Counts";
+    
+    h1[iFile] = new TH1I("h1",title.c_str(),100,0,200);
+    
+    f = new TFile(file_path.c_str());
+    
+    if(!f){
+      cout << " check file :" << file_path << endl;
+      return;
+    }
+    
+    // Variables to read in
+    TTree *rat_tree;
+    
+    RAT::DS::Root *ds = new RAT::DS::Root();
+    
+    TVector3 mc_p3;
+    double   mc_energy;
+      
+    rat_tree = (TTree *)f->Get("T");
+    rat_tree->SetBranchAddress("ds", &ds);
+    
+    int    nhit = 0;
+    double totPE = 0.;
+    RAT::DS::PMT *pmt;
+    
+    int n_events = rat_tree->GetEntries();
+    for (int event = 0; event < n_events; event++){
+      rat_tree->GetEntry(event);
+      
+      for (int sub_event = 0; 
+	   sub_event < ds->GetEVCount(); 
+	   sub_event++) {
+	
+	// MC info
+	mc_p3 = ds->GetMC()->GetMCParticle(0)->GetPosition();
+	mc_energy = ds->GetMC()->GetMCParticle(0)->GetKE();
+	
+	// Event info
+	nhit  = ds->GetEV(sub_event)->GetPMTCount();
+	totPE = ds->GetEV(sub_event)->GetTotalCharge();
+	
+	for (int hit = 0; hit < nhit; hit++) {
+	  pmt = ds->GetEV(sub_event)->GetPMT(hit);
+	}
+	
+	if     (metric=="nhit")
+	  h1[iFile]->Fill(nhit);
+	else if(metric=="totPE"){
+	  h1[iFile]->Fill(totPE); 
+	}else{ 
+	  cerr << " invalid metric: " << metric << endl;
+	  return;
+	}
+	
+      } // end of: for (sub_event
+      
+    } //end of:  for (int event = 0
+    
+    //----------
+    
+    text  = "#color[";
+    text += std::to_string(colors[iFile]);
+    text += "]{";
+    text += GetFileName(PIDs[iFile],CIDs[iFile]);
+    text += "}";
+
+    h1[iFile]->SetLineColor(colors[iFile]);
+    h1[iFile]->Draw(option.c_str());
+    option = "same";
+
+    latex->DrawLatex(0.6,0.8-0.05*iFile,text.c_str());
+    
+  }  
+}
+
 string GetFileName(int genPID = 11, int fileID = 1){
   
   string file_name = "wbls_1pct_208Tl_PMT";
@@ -36,7 +186,7 @@ string GetFileName(int genPID = 11, int fileID = 1){
     break;
   default:
     cerr << " Error: no matching file found with this fileID " << endl;
-    break;
+    return "";
   }
   
   switch(genPID){
@@ -51,14 +201,16 @@ string GetFileName(int genPID = 11, int fileID = 1){
     break;
   default:
     cerr << " Error: no matching file found with this genID " << endl;
-    break;
+    return "";
   }
+  
   return file_name;
 }
 
-string GetFilePath(int genPID = 11, int fileID = 1,
-		   string file_path = "/Users/gsmith23/software/modern/pull94/watchmakers/"){
+string GetFilePath(int genPID = 11, int fileID = 1){
   
+  string file_path = parent_path;
+
   switch(fileID){
   case(1):
     file_path += "test_wbls_1pct/root_files_detectorMedia_wbls_1pct_WM_0420_lightSim/";
@@ -71,7 +223,7 @@ string GetFilePath(int genPID = 11, int fileID = 1,
     break;
   default:
     cerr << " Error: no matching file found with this fileID " << endl;
-    break;
+    return "";
   }
   
   switch(genPID){
@@ -86,114 +238,16 @@ string GetFilePath(int genPID = 11, int fileID = 1,
     break;
   default:
     cerr << " Error: no matching file found with this genID " << endl;
-    break;
+    return "";
   }
   
-  file_path += GetFileName(genPID,fileID);
+  string file_name = GetFileName(genPID,fileID);
+  file_path += file_name;
   file_path += ".root";
+
+  cout << endl;
+  cout << " file: " << endl; 
+  cout << " " << file_name << endl;
   
   return file_path;
 }
-
-TH1I * Get_hNhits(int genPID = 11, int fileID = 1) {
-
-  string file_path = GetFilePath(genPID,fileID);
-  string file_name = GetFileName(genPID,fileID);
-
-  TFile *f;
-  f = new TFile(file_path.c_str());
-  
-  TTree *rat_tree;
-  
-  RAT::DS::Root *ds = new RAT::DS::Root();
-  
-  rat_tree = (TTree *)f->Get("T");
-  rat_tree->SetBranchAddress("ds", &ds);
-  
-  RAT::DS::EV *ev;
-  
-  int nhit = 0;
-
-  TStyle * wmStyle = GetwmStyle();
-  gROOT->SetStyle("wmStyle");
-  gROOT->ForceStyle();
-
-  string title = ";Nhits;Counts";
-
-  TH1I * hNhit = new TH1I("hNhit",title.c_str(),100,0,200);
-  
-  int n_events = rat_tree->GetEntries();
-  for (int event = 0; event < n_events; event++){
-    rat_tree->GetEntry(event);
-  
-    for (int sub_event = 0; 
-	 sub_event < ds->GetEVCount(); 
-	 sub_event++) {
-      
-      ev   = ds->GetEV(sub_event);
-      nhit = ev->GetPMTCount();
-      
-      hNhit->Fill(nhit);
-      
-    } // end of: for (sub_event
-  
-  } //end of:  for (int event = 0
-  
-  return hNhit;
-}
-
-void Draw_Multi_hNhits(int genPID = 11,
-		       int fileID = 3
-		       ){
-  
-  // by default compare generators
-  bool byCocktail = false;
-    
-  // if a particle ID is chosen 
-  // compare by cocktail
-  if(genPID!=0)
-    byCocktail = true;
-  
-  static const int nFiles = 3;
-  int genPIDs[nFiles] = {11,2112,208}; // e+,n,208Tl
-  int fileIDs[nFiles] = {1,3,5}; // percentate WbLS
-
-  TLatex * latex = new TLatex();
-  string text = "test";
-  latex->SetNDC();
-  latex->SetTextSize(0.03);
-  
-  Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
-
-  TH1I * hNhits[nFiles];  
-  
-  string option = "";
-  for (int i = 0 ; i < nFiles ; i++ ){
-
-    if  (byCocktail) // compare cocktail
-      fileID = fileIDs[i];
-    else              // compare particle
-      genPID = genPIDs[i];
-    
-    cout << endl;
-    cout << " fileID = " << fileID << endl;
-    cout << " genPID = " << genPID << endl;
-
-    hNhits[i] = Get_hNhits(genPID,fileID);
-    text  = "#color[";
-    text += std::to_string(colors[i]);
-    text += "]{";
-    text += GetFileName(genPID,fileID);
-    text += "}";
-
-    hNhits[i]->SetLineColor(colors[i]);
-    hNhits[i]->Draw(option.c_str());
-    option = "same";
-
-    latex->DrawLatex(0.6,0.8-0.05*i,text.c_str());
-
-  }
-  
-}
-
-
