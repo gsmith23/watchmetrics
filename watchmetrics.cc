@@ -18,18 +18,23 @@ using namespace std;
 
 #include <TRandom.h>
 
+// get this file or comment out if using other TStyle settings
 // https://github.com/Watchman-PMT/Wavedump_Wrapper/blob/master/Common_Tools/wmStyle.C
 #include "wmStyle.C"
 
 //------------------
 // Globals
-
+   
 //----------
-// Functions
-string GetFileName(int genPID, int fileID);
-string GetFilePath(int genPID, int fileID);
-void   Draw_Multi_TH(string metric = "nhit");
-void   SetIDs(int particleID, int cocktailID);
+// Objects
+
+// for use with wmStyle.C
+TStyle * wmStyle = GetwmStyle();
+gROOT->SetStyle("wmStyle");
+gROOT->ForceStyle();
+
+TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
+TH1I    * h1[nFiles];  
 
 //----------
 // Variables
@@ -44,9 +49,11 @@ int CIDs[nFiles] = {1,3,5};
 Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
 
 //----------
-// Objects
-TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
-TH1I    * h1[nFiles];  
+// Functions
+string GetFileName(int genPID, int fileID);
+string GetFilePath(int genPID, int fileID);
+void   Draw_Multi_TH(string metric = "nhit");
+void   SetIDs(int particleID, int cocktailID);
 
 //-------------------
 
@@ -75,7 +82,6 @@ void SetIDs(int particleID, int cocktailID){
 
 void Draw_Multi_TH(string metric){
   
-
   TLatex * latex = new TLatex();
   string text = "test";
   latex->SetNDC();
@@ -88,11 +94,6 @@ void Draw_Multi_TH(string metric){
     string file_name = GetFileName(PIDs[iFile],CIDs[iFile]);
         
     TFile *f;
-	  
-    // comment out if not using wmStyle.C
-    TStyle * wmStyle = GetwmStyle();
-    gROOT->SetStyle("wmStyle");
-    gROOT->ForceStyle();
     
     string title = ";";
     title += metric;
