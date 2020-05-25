@@ -18,7 +18,8 @@ using namespace std;
 
 #include <TRandom.h>
 
-// get this file or comment out if using other TStyle settings
+// dependency for default style
+// see - SetGraphics()
 // https://github.com/Watchman-PMT/Wavedump_Wrapper/blob/master/Common_Tools/wmStyle.C
 #include "wmStyle.C"
 
@@ -40,43 +41,106 @@ Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
 //----------
 // Objects
 
-// for use with wmStyle.C
-TStyle * wmStyle = GetwmStyle();
-
-TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
-TH1I    * h1[nFiles];  
-
-
+TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,1000);
+TLatex  * latex = new TLatex();
+TH1D    * h1[nFiles];  
+TH2D    * h2;  
+bool      logY = false; 
+bool      logZ = true; 
+ 
 //----------
 // Functions
 string GetFileName(int genPID, int fileID);
 string GetFilePath(int genPID, int fileID);
-void   Draw_Multi_TH(string metric = "nhit");
+
+
+void   Draw_Multi_TH(string metric1 = "nhit");
+
+void   Fill_TH2D(string metric1,
+		 string metric2,
+		 int    PID,
+		 int    CID);
+
+void   Fill_TH1D(string metric1,
+		 int    iFile);
+
+void   Init(int particleID, int cocktailID);
 void   SetIDs(int particleID, int cocktailID);
-void   SetGraphics(bool logY);
+void   SetGraphics();
+void   Init_Histos();
 
 //-------------------
 
-void   watchmetrics(string metric1 = "nhit",
-		    bool   logY = false, 
-		    int    particleID = 11, 
-		    string metric2 = "",
-		    int    cocktailID = 1){
+void   watchmetrics(int    particleID = 11,
+		    string metric1 = "nhit",
+		    string metric2 = "totPE",
+		    int    cocktailID = 3){
   
-  SetIDs(particleID,cocktailID);
-
-  SetGraphics(logY);
   
+  Init(particleID,cocktailID);
+  
+  c1->cd(1);
+  Fill_TH2D(metric1,metric2,particleID,cocktailID);
+  
+  TH2D *h2_1 = (TH2D*)h2->Clone();
+  h2_1->Draw("colz");
+  
+  c1->cd(2);
   Draw_Multi_TH(metric1);
   
 }
 
-void   SetGraphics(bool logY){
+void Init(int particleID,int cocktailID){
+  
+  // particleID != 0 - fixed particle
+  // particleID == 0 - fixed cocktail
+  SetIDs(particleID,cocktailID);
+
+  SetGraphics();
+  
+  Init_Histos();
+}
+
+void Init_Histos(){
+
+  string name = "h1_";;
+  for (int iFile = 0 ; iFile < nFiles ; iFile++){
+    name += std::to_string(iFile); 
+    h1[iFile] = new TH1D(name.c_str(),";;Counts",100,0,200);
+  }
+  
+  h2 = new TH2D("h2","h2",100,0,200,100,0,200);
+  
+}
+
+void   SetGraphics(){
 
   c1->SetLogy(logY);
+  c1->SetLogz(logZ);
 
+  c1->Divide(1,2);
+
+  TStyle * wmStyle = GetwmStyle();
+  
+  const int NCont = 255;
+  const int NRGBs = 5;
+  
+  // Color scheme for 2D plotting with a better defined scale 
+  double stops[NRGBs] = { 0.00, 0.34, 0.61, 0.84, 1.00 };
+  double red[NRGBs]   = { 0.00, 0.00, 0.87, 1.00, 0.51 };
+  double green[NRGBs] = { 0.00, 0.81, 1.00, 0.20, 0.00 };
+  double blue[NRGBs]  = { 0.51, 1.00, 0.12, 0.00, 0.00 };          
+  TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, NCont);
+  
+  wmStyle->SetNumberContours(NCont);
+  
   gROOT->SetStyle("wmStyle");
+
   gROOT->ForceStyle();
+  
+  latex->SetNDC();
+  latex->SetTextSize(0.03);
+
 
 }
 
@@ -90,94 +154,128 @@ void SetIDs(int particleID, int cocktailID){
   }
 }
 
-void Draw_Multi_TH(string metric){
+void Fill_TH1D(string metric1,
+	       int    iFile){
   
-  TLatex * latex = new TLatex();
-  string text = "test";
-  latex->SetNDC();
-  latex->SetTextSize(0.03);
+  Fill_TH2D(metric1,"",PIDs[iFile],CIDs[iFile]);
+  h1[iFile] = (TH1D*)(h2->ProjectionX()->Clone());
+  
+}
+
+void Fill_TH2D(string metric1,
+	       string metric2,
+	       int    PID,
+	       int    CID){
+  
+  string file_path = GetFilePath(PID,CID);
+  string file_name = GetFileName(PID,CID);
+  
+  TFile *f;
+  f = new TFile(file_path.c_str());
+  
+  if(!f){
+    cout << " check file :" << file_path << endl;
+    return;
+  }
+
+  string title = ";";
+  title += metric1;
+  title += ";";
+  title += metric2;
+    
+  h2->Reset();
+  h2->SetTitle(title.c_str());
+  
+  if(metric2=="mc_energy")
+    h2->SetBins(100,0,200,100,0,10);
+  
+  // Variables to read in
+  TTree *rat_tree;
+  
+  RAT::DS::Root *ds = new RAT::DS::Root();
+  
+  TVector3 mc_p3;
+  double   mc_energy;
+  
+  rat_tree = (TTree *)f->Get("T");
+  rat_tree->SetBranchAddress("ds", &ds);
+  
+  int    nhit = 0;
+  double totPE = 0.;
+  RAT::DS::PMT *pmt;
+
+  int n_events = rat_tree->GetEntries();
+  for (int event = 0; event < n_events; event++){
+    rat_tree->GetEntry(event);
+    
+    for (int sub_event = 0; 
+	 sub_event < ds->GetEVCount(); 
+	 sub_event++) {
+      
+      // MC info
+      mc_p3 = ds->GetMC()->GetMCParticle(0)->GetPosition();
+      mc_energy = ds->GetMC()->GetMCParticle(0)->GetKE();
+      
+      // Event info
+      nhit  = ds->GetEV(sub_event)->GetPMTCount();
+      totPE = ds->GetEV(sub_event)->GetTotalCharge();
+      
+      for (int hit = 0; hit < nhit; hit++) {
+	pmt = ds->GetEV(sub_event)->GetPMT(hit);
+      }
+      
+      if     (metric1=="nhit"){
+	
+	if(metric2=="")
+	  h2->Fill(nhit,0);
+	else if(metric2=="totPE")
+	  h2->Fill(nhit,totPE);
+	else if(metric2=="mc_energy")
+	  h2->Fill(nhit,mc_energy);
+      
+      }
+      else{ 
+	cerr << " invalid metric1: " << metric1 << endl;
+	return;
+      }
+      
+    } // end of: for (sub_event
+    
+  } //end of:  for (int event = 0
+  
+  return;
+}
+
+void Draw_Multi_TH(string metric1){
   
   string option = "";
+  string title  = ";";
+  string text   = "test";
+  
+  title += metric1;
+  title += ";";
+  title += "Counts";
+  
   for (int iFile = 0 ; iFile < nFiles ; iFile++ ){
     
-    string file_path = GetFilePath(PIDs[iFile],CIDs[iFile]);
-    string file_name = GetFileName(PIDs[iFile],CIDs[iFile]);
-        
-    TFile *f;
-    
-    string title = ";";
-    title += metric;
-    title += ";Counts";
-    
-    h1[iFile] = new TH1I("h1",title.c_str(),100,0,200);
-    
-    f = new TFile(file_path.c_str());
-    
-    if(!f){
-      cout << " check file :" << file_path << endl;
-      return;
-    }
-    
-    // Variables to read in
-    TTree *rat_tree;
-    
-    RAT::DS::Root *ds = new RAT::DS::Root();
-    
-    TVector3 mc_p3;
-    double   mc_energy;
-      
-    rat_tree = (TTree *)f->Get("T");
-    rat_tree->SetBranchAddress("ds", &ds);
-    
-    int    nhit = 0;
-    double totPE = 0.;
-    RAT::DS::PMT *pmt;
-    
-    int n_events = rat_tree->GetEntries();
-    for (int event = 0; event < n_events; event++){
-      rat_tree->GetEntry(event);
-      
-      for (int sub_event = 0; 
-	   sub_event < ds->GetEVCount(); 
-	   sub_event++) {
-	
-	// MC info
-	mc_p3 = ds->GetMC()->GetMCParticle(0)->GetPosition();
-	mc_energy = ds->GetMC()->GetMCParticle(0)->GetKE();
-	
-	// Event info
-	nhit  = ds->GetEV(sub_event)->GetPMTCount();
-	totPE = ds->GetEV(sub_event)->GetTotalCharge();
-	
-	for (int hit = 0; hit < nhit; hit++) {
-	  pmt = ds->GetEV(sub_event)->GetPMT(hit);
-	}
-	
-	if     (metric=="nhit")
-	  h1[iFile]->Fill(nhit);
-	else if(metric=="totPE"){
-	  h1[iFile]->Fill(totPE); 
-	}else{ 
-	  cerr << " invalid metric: " << metric << endl;
-	  return;
-	}
-	
-      } // end of: for (sub_event
-      
-    } //end of:  for (int event = 0
-    
-    //----------
-    
+    h1[iFile]->Reset();
+    h1[iFile]->SetTitle(title.c_str());
+
+    // Fill histogram
+    Fill_TH1D(metric1,iFile);
+  }
+  
+  for (int iFile = 0 ; iFile < nFiles ; iFile++ ){
     text  = "#color[";
     text += std::to_string(colors[iFile]);
     text += "]{";
     text += GetFileName(PIDs[iFile],CIDs[iFile]);
     text += "}";
-
+    
     h1[iFile]->SetLineColor(colors[iFile]);
     h1[iFile]->Draw(option.c_str());
+    
     option = "same";
-
     latex->DrawLatex(0.6,0.8-0.05*iFile,text.c_str());
     
   }  
