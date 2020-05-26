@@ -27,7 +27,7 @@ using namespace std;
 // Globals
    
 //----------
-// Variables
+// Files
 static const int nFiles = 3;
 string parent_path = "/Users/gsmith23/software/modern/pull94/watchmakers/";
 
@@ -36,32 +36,29 @@ int PIDs[nFiles] = {11,2112,208};
 // cocktail ID (dev with percentate WbLS)
 int CIDs[nFiles] = {1,3,5}; 
 
-Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
-
 //----------
-// Objects
+// Plotting
 
-TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,1000);
+TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
 TLatex  * latex = new TLatex();
 TH1D    * h1[nFiles];  
 TH2D    * h2;  
 bool      logY = false; 
-bool      logZ = true; 
+bool      logZ = false; 
+Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
  
 //----------
 // Functions
 string GetFileName(int genPID, int fileID);
 string GetFilePath(int genPID, int fileID);
 
+void   Draw_Multi_TH(string metrics[2]);
 
-void   Draw_Multi_TH(string metric1 = "nhit");
-
-void   Fill_TH2D(string metric1,
-		 string metric2,
+void   Fill_TH2D(string metrics[2],
 		 int    PID,
 		 int    CID);
 
-void   Fill_TH1D(string metric1,
+void   Fill_TH1D(string metrics[2],
 		 int    iFile);
 
 void   Init(int particleID, int cocktailID);
@@ -78,15 +75,17 @@ void   watchmetrics(int    particleID = 11,
   
   
   Init(particleID,cocktailID);
+
+  string metrics[2];
+  metrics[0] = metric1;
+  metrics[1] = metric2;
   
-  c1->cd(1);
-  Fill_TH2D(metric1,metric2,particleID,cocktailID);
+  //Fill_TH2D(metrics,particleID,cocktailID);
   
-  TH2D *h2_1 = (TH2D*)h2->Clone();
-  h2_1->Draw("colz");
+//   TH2D *h2_1 = (TH2D*)h2->Clone();
+//   h2_1->Draw("colz");
   
-  c1->cd(2);
-  Draw_Multi_TH(metric1);
+  Draw_Multi_TH(metrics);
   
 }
 
@@ -118,8 +117,6 @@ void   SetGraphics(){
   c1->SetLogy(logY);
   c1->SetLogz(logZ);
 
-  c1->Divide(1,2);
-
   TStyle * wmStyle = GetwmStyle();
   
   const int NCont = 255;
@@ -147,23 +144,22 @@ void   SetGraphics(){
 void SetIDs(int particleID, int cocktailID){
   
   for( int i = 0 ; i < nFiles ; i++){
-    if  (particleID != 0) // compare cocktail
+    if  (particleID != 0)
       PIDs[i] = particleID;
-    else                 // compare particle
+    else 
       CIDs[i] = cocktailID;
   }
 }
 
-void Fill_TH1D(string metric1,
+void Fill_TH1D(string metrics[2],
 	       int    iFile){
   
-  Fill_TH2D(metric1,"",PIDs[iFile],CIDs[iFile]);
+  Fill_TH2D(metrics,PIDs[iFile],CIDs[iFile]);
   h1[iFile] = (TH1D*)(h2->ProjectionX()->Clone());
   
 }
 
-void Fill_TH2D(string metric1,
-	       string metric2,
+void Fill_TH2D(string metrics[2],
 	       int    PID,
 	       int    CID){
   
@@ -179,15 +175,39 @@ void Fill_TH2D(string metric1,
   }
 
   string title = ";";
-  title += metric1;
+  title += metrics[0];
   title += ";";
-  title += metric2;
+  title += metrics[1];
     
   h2->Reset();
   h2->SetTitle(title.c_str());
   
-  if(metric2=="mc_energy")
-    h2->SetBins(100,0,200,100,0,10);
+  int nBins[2];
+  double min[2], max[2];
+  
+  for ( int i = 0 ; i < 2 ; i++ ){
+        
+    if     ( metrics[i] == "nhit" ||
+	     metrics[i] == "totPE" ){
+      nBins[i]= 100;
+      min[i]  = 0.0;
+      max[i]  = 200.;
+    }
+    else if( metrics[i] == "mc_energy" ){
+      nBins[i]= 100;
+      min[i]  = 0.0;
+      max[i]  = 10.;
+    }
+    else{
+      nBins[i]= 100;
+      min[i]  = 0.0;
+      max[i]  = 200.;
+    }
+    
+  }
+  
+  h2->SetBins(nBins[0],min[0],max[0],
+	      nBins[1],min[1],max[1]);
   
   // Variables to read in
   TTree *rat_tree;
@@ -200,8 +220,11 @@ void Fill_TH2D(string metric1,
   rat_tree = (TTree *)f->Get("T");
   rat_tree->SetBranchAddress("ds", &ds);
   
-  int    nhit = 0;
+  double nhit  = 0;
   double totPE = 0.;
+  // for filling histogram
+  double metric_variable[2];
+
   RAT::DS::PMT *pmt;
 
   int n_events = rat_tree->GetEntries();
@@ -217,27 +240,26 @@ void Fill_TH2D(string metric1,
       mc_energy = ds->GetMC()->GetMCParticle(0)->GetKE();
       
       // Event info
-      nhit  = ds->GetEV(sub_event)->GetPMTCount();
+      nhit  = (double)ds->GetEV(sub_event)->GetPMTCount();
       totPE = ds->GetEV(sub_event)->GetTotalCharge();
       
       for (int hit = 0; hit < nhit; hit++) {
 	pmt = ds->GetEV(sub_event)->GetPMT(hit);
       }
       
-      if     (metric1=="nhit"){
-	
-	if(metric2=="")
-	  h2->Fill(nhit,0);
-	else if(metric2=="totPE")
-	  h2->Fill(nhit,totPE);
-	else if(metric2=="mc_energy")
-	  h2->Fill(nhit,mc_energy);
+      for ( int i = 0 ; i < 2 ; i++ ){
+	if     ( metrics[i] == "nhit" )
+	  metric_variable[i] = nhit; 
+	else if( metrics[i] == "totPE" )
+	  metric_variable[i] = totPE; 
+	else if( metrics[i] == "mc_energy" )
+	  metric_variable[i] = mc_energy; 
+	else
+	  metric_variable[i] = 0.;
+      }
       
-      }
-      else{ 
-	cerr << " invalid metric1: " << metric1 << endl;
-	return;
-      }
+      h2->Fill(metric_variable[0],
+	       metric_variable[1]);
       
     } // end of: for (sub_event
     
@@ -246,23 +268,25 @@ void Fill_TH2D(string metric1,
   return;
 }
 
-void Draw_Multi_TH(string metric1){
+void Draw_Multi_TH(string metrics[2]){
   
   string option = "";
   string title  = ";";
   string text   = "test";
   
-  title += metric1;
+  title += metrics[0];
   title += ";";
   title += "Counts";
   
   for (int iFile = 0 ; iFile < nFiles ; iFile++ ){
     
     h1[iFile]->Reset();
-    h1[iFile]->SetTitle(title.c_str());
-
+    
     // Fill histogram
-    Fill_TH1D(metric1,iFile);
+    Fill_TH1D(metrics,iFile);
+    
+    h1[iFile]->SetTitle(title.c_str());
+    
   }
   
   for (int iFile = 0 ; iFile < nFiles ; iFile++ ){
