@@ -5,6 +5,7 @@ using namespace std;
 
 #include <RAT/DS/EV.hh>
 #include <RAT/DS/Root.hh>
+#include <RAT/DS/Run.hh>
 
 #include <TCanvas.h>
 #include <TLatex.h>
@@ -28,13 +29,14 @@ using namespace std;
    
 //----------
 // Files
-static const int nFiles = 3;
+static const int nFiles = 6;
+
 string parent_path = "/Users/gsmith23/software/modern/pull94/watchmakers/";
 
 // particle ID (dev with e+, n ,208Tl)
-int PIDs[nFiles] = {11,2112,208}; 
+int PIDs[nFiles] = {11,2112,208,0,0,0}; 
 // cocktail ID (dev with percentate WbLS)
-int CIDs[nFiles] = {1,3,5}; 
+int CIDs[nFiles] = {1,3,5,101,301,0}; 
 
 //----------
 // Plotting
@@ -42,10 +44,11 @@ int CIDs[nFiles] = {1,3,5};
 TCanvas * c1 = new TCanvas("c1", "c1",1220,63,700,500);
 TLatex  * latex = new TLatex();
 TH1D    * h1[nFiles];  
+TH1D    * hT;
 TH2D    * h2;  
 bool      logY = false; 
 bool      logZ = false; 
-Int_t colors[5] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1};
+Int_t colors[] = {kRed,kOrange,kGreen+2,kCyan+1,kMagenta+1,kBlack};
  
 //----------
 // Functions
@@ -68,23 +71,33 @@ void   Init_Histos();
 
 //-------------------
 
-void   watchmetrics(int    particleID = 11,
+void   watchmetrics(int    particleID = 2112,
 		    string metric1 = "nhit",
 		    string metric2 = "totPE",
-		    int    cocktailID = 3){
+		    int    cocktailID = 0){
   
   
   Init(particleID,cocktailID);
-
+  
   string metrics[2];
   metrics[0] = metric1;
   metrics[1] = metric2;
   
-  //Fill_TH2D(metrics,particleID,cocktailID);
+  //----
+  // 2D plot
+  // Fill_TH2D(metrics,particleID,cocktailID);
   
-//   TH2D *h2_1 = (TH2D*)h2->Clone();
-//   h2_1->Draw("colz");
+  // 
+  // TH2D *h2_1 = (TH2D*)h2->Clone();
+  // h2_1->Draw("colz");
+
+  //----
+  // Timing  
+  // TH1D *hT_2 = (TH1D*)hT->Clone();
+  // hT_2->Draw();
   
+  //-----
+  // all cocktails
   Draw_Multi_TH(metrics);
   
 }
@@ -93,6 +106,7 @@ void Init(int particleID,int cocktailID){
   
   // particleID != 0 - fixed particle
   // particleID == 0 - fixed cocktail
+  
   SetIDs(particleID,cocktailID);
 
   SetGraphics();
@@ -109,6 +123,7 @@ void Init_Histos(){
   }
   
   h2 = new TH2D("h2","h2",100,0,200,100,0,200);
+  hT = new TH1D("hT","hT",100,-1000,1000);
   
 }
 
@@ -143,17 +158,27 @@ void   SetGraphics(){
 
 void SetIDs(int particleID, int cocktailID){
   
+  int initPIDs[] = {11,2112,208,0,0,0};
+  int initCIDs[] = {1,3,5,101,301,0}; 
+ 
   for( int i = 0 ; i < nFiles ; i++){
+    PIDs[i] = initPIDs[i];
+    CIDs[i] = initCIDs[i];
+    
     if  (particleID != 0)
       PIDs[i] = particleID;
-    else 
+    else
       CIDs[i] = cocktailID;
+    
+//     cout << " PIDs[" << i << "] = " << PIDs[i] << endl;
+//     cout << " CIDs[" << i << "] = " << CIDs[i] << endl;
   }
+
 }
 
 void Fill_TH1D(string metrics[2],
 	       int    iFile){
-  
+
   Fill_TH2D(metrics,PIDs[iFile],CIDs[iFile]);
   h1[iFile] = (TH1D*)(h2->ProjectionX()->Clone());
   
@@ -163,6 +188,9 @@ void Fill_TH2D(string metrics[2],
 	       int    PID,
 	       int    CID){
   
+//   cout << " PID = " << PID << endl;
+//   cout << " CID = " << CID << endl;
+
   string file_path = GetFilePath(PID,CID);
   string file_name = GetFileName(PID,CID);
   
@@ -198,6 +226,12 @@ void Fill_TH2D(string metrics[2],
       min[i]  = 0.0;
       max[i]  = 10.;
     }
+    else if( metrics[i] == "mc_r" ||
+	     metrics[i] == "mc_z"){
+      nBins[i]= 100;
+      min[i]  = 0.0;
+      max[i]  = 10000.;
+    }
     else{
       nBins[i]= 100;
       min[i]  = 0.0;
@@ -210,18 +244,24 @@ void Fill_TH2D(string metrics[2],
 	      nBins[1],min[1],max[1]);
   
   // Variables to read in
-  TTree *rat_tree;
+  TTree *rat_tree, *run_tree;
   
   RAT::DS::Root *ds = new RAT::DS::Root();
-  
+  RAT::DS::Run *run = new RAT::DS::Run();
+    
   TVector3 mc_p3;
   double   mc_energy;
   
   rat_tree = (TTree *)f->Get("T");
   rat_tree->SetBranchAddress("ds", &ds);
+  run_tree = (TTree *)f->Get("runT");
+  run_tree->SetBranchAddress("run", &run);
   
-  double nhit  = 0;
+  run_tree->GetEntry(0);
+  
+  int    nhit  = 0, nhit_inner = 0, nhit_veto = 0;
   double totPE = 0.;
+  double mc_r  = 0;
   // for filling histogram
   double metric_variable[2];
 
@@ -239,27 +279,51 @@ void Fill_TH2D(string metrics[2],
       mc_p3 = ds->GetMC()->GetMCParticle(0)->GetPosition();
       mc_energy = ds->GetMC()->GetMCParticle(0)->GetKE();
       
+      //cout << " mc_energy = " << mc_energy << endl;
+
       // Event info
       nhit  = (double)ds->GetEV(sub_event)->GetPMTCount();
+      nhit_inner = 0;
+      nhit_veto  = 0;
+      ds->GetEV(sub_event)->GetTotalCharge();
       totPE = ds->GetEV(sub_event)->GetTotalCharge();
       
       for (int hit = 0; hit < nhit; hit++) {
 	pmt = ds->GetEV(sub_event)->GetPMT(hit);
+
+	if(run->GetPMTInfo()->GetType(pmt->GetID())==1){
+	  hT->Fill(pmt->GetTime());
+	  
+	  //if(pmt->GetTime() < 50.)
+	  nhit_inner++;
+	  
+	}
+	else if(run->GetPMTInfo()->GetType(pmt->GetID())==2)
+	  nhit_veto++;
+	
       }
       
+      nhit = nhit_inner;
+      mc_r = sqrt(mc_p3.x()*mc_p3.x() + mc_p3.x()*mc_p3.x());
+
       for ( int i = 0 ; i < 2 ; i++ ){
 	if     ( metrics[i] == "nhit" )
-	  metric_variable[i] = nhit; 
+	  metric_variable[i] = (double)nhit; 
 	else if( metrics[i] == "totPE" )
 	  metric_variable[i] = totPE; 
 	else if( metrics[i] == "mc_energy" )
 	  metric_variable[i] = mc_energy; 
+	else if( metrics[i] == "mc_r" )
+	  metric_variable[i] = mc_r; 
+	else if( metrics[i] == "mc_z" )
+	  metric_variable[i] = mc_p3.z(); 
 	else
 	  metric_variable[i] = 0.;
       }
-      
-      h2->Fill(metric_variable[0],
-	       metric_variable[1]);
+
+      if(nhit > 0)
+	h2->Fill(metric_variable[0],
+		 metric_variable[1]);
       
     } // end of: for (sub_event
     
@@ -310,6 +374,9 @@ string GetFileName(int genPID = 11, int fileID = 1){
   string file_name = "wbls_1pct_208Tl_PMT";
   
   switch(fileID){
+  case(0):
+    file_name =  "gd_";
+    break;
   case(1):
     file_name =  "wbls_1pct_";
     break;
@@ -319,8 +386,14 @@ string GetFileName(int genPID = 11, int fileID = 1){
   case(5):
     file_name =  "wbls_5pct_";
     break;
+  case(101):
+    file_name =  "wbls_1pct_gd_01pct_";
+    break;
+  case(301):
+    file_name =  "wbls_3pct_gd_01pct_";
+    break;
   default:
-    cerr << " Error: no matching file found with this fileID " << endl;
+    cerr << " Error: no matching file found with this fileID " << fileID << endl;
     return "";
   }
   
@@ -347,6 +420,9 @@ string GetFilePath(int genPID = 11, int fileID = 1){
   string file_path = parent_path;
 
   switch(fileID){
+  case(0):
+    file_path += "test_gd/root_files_lightSim/";
+    break;
   case(1):
     file_path += "test_wbls_1pct/root_files_detectorMedia_wbls_1pct_WM_0420_lightSim/";
     break;
@@ -355,6 +431,12 @@ string GetFilePath(int genPID = 11, int fileID = 1){
     break;
   case(5):
     file_path += "test_wbls_5pct/root_files_detectorMedia_wbls_5pct_WM_0420_lightSim/";
+    break;
+  case(101):
+    file_path += "test_wbls_1pct_gd_01pct/root_files_detectorMedia_wbls_1pct_gd_01pct_WM_0420_lightSim/";
+    break;
+  case(301):
+    file_path += "test_wbls_3pct_gd_01pct/root_files_detectorMedia_wbls_3pct_gd_01pct_WM_0420_lightSim/";
     break;
   default:
     cerr << " Error: no matching file found with this fileID " << endl;
