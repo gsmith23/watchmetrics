@@ -50,7 +50,7 @@ static const int nFiles = nWidths * nRefs * nPhots;
 int minSize  = 1600000, sizeStep  = 200000;
 int maxSize  = minSize + (nWidths*sizeStep); 
 
-int minPhoto = 20000,   photoStep = 5000;
+int minPhoto = 10000,   photoStep = 5000;
 int maxPhoto = minPhoto + (nPhots*photoStep);  
 
 int minRef   = 70,      refStep   = 10;
@@ -139,9 +139,9 @@ void   watchmetrics(int    particleID = -13,
   
   //-----
   // all cocktails
-  //Draw_Multi_TH(metrics);
+  Draw_Multi_TH(metrics);
   
-  Draw_Multi_TGraph(metrics);
+  //Draw_Multi_TGraph(metrics);
 
 }
 
@@ -384,7 +384,7 @@ void Fill_TH2D(string metrics[2],
       nhit  = (double)ds->GetEV(sub_event)->GetPMTCount();
       nhit_inner = 0;
       nhit_veto  = 0;
-      ds->GetEV(sub_event)->GetTotalCharge();
+      //ds->GetEV(sub_event)->GetTotalCharge();
       totPE = ds->GetEV(sub_event)->GetTotalCharge();
       
       for (int hit = 0; hit < nhit; hit++) {
@@ -439,7 +439,7 @@ void Fill_TH2D(string metrics[2],
       // if(nhit > 8)
       // if(nhit < 5 && mc_energy > 2.0)
       h2->Fill(metric_variable[0],
-		 metric_variable[1]);
+	       metric_variable[1]);
       
     } // end of: for (sub_event
     
@@ -607,8 +607,8 @@ void Draw_Multi_TH(string metrics[2]){
     x_axis  = h1[iFile]->GetXaxis();
     peak_x  = x_axis->GetBinCenter(max_bin);
     
-    x_min = 0.8*peak_x;
-    x_max = 1.1*peak_x;
+    x_min = 0.6*peak_x;
+    x_max = 1.3*peak_x;
     
     if( x_min < x_range[0])
       x_range[0] = x_min;
